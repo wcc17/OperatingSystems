@@ -37,6 +37,7 @@ public class Assignment3 {
 		public synchronized void run() {
 			while(true) {
 				count++;
+				//make a delay for haircuts
 				if(count > 10000000) {
 					try {
 						System.out.println("barber is asleep now");
@@ -86,10 +87,10 @@ public class Assignment3 {
 					}
 
 					//wake barber 1 if hes not busy
-					if(barber1.isWaiting()) {
+					if(barber1.isWaiting() || barber1.isNew()) {
 						System.out.println("customer number: " + customer.id + " got up from waiting and got a haircut from barber1");
 						wakeFirstBarber(customer);
-					} else if(barber2.isWaiting()) {
+					} else if(barber2.isWaiting() || barber2.isNew()) {
 						System.out.println("customer number: " + customer.id + " got up from waiting and got a haircut from barber2");
 						wakeSecondBarber(customer);
 					}
@@ -115,14 +116,14 @@ public class Assignment3 {
 				//both barbers are already busy and the queue is already full
 				System.out.println("customer number: " + customer.id + " should leave. putting customer monitor to sleep");
 				customerMonitor.wait();
-			} else if(!barber1.isWaiting() && !barber2.isWaiting()) {
+			} else if((!barber1.isWaiting() && !barber1.isNew()) && (!barber2.isWaiting() && !barber2.isNew())) {
 				//both barbers are busy but we can sit them in a chair
 				System.out.println("customer number: " + customer.id + " is waiting for a haircut");
 				customers.add(customer);
-			} else if(barber1.isWaiting()) {
+			} else if(barber1.isWaiting() || barber1.isNew()) {
 				System.out.println("customer number: " + customer.id + " walked right in and got a haircut from barber1");
 				wakeFirstBarber(customer);
-			} else if(barber2.isWaiting()) {
+			} else if(barber2.isWaiting() || barber2.isNew()) {
 				System.out.println("customer number: " + customer.id + " walked right in and got a haircut from barber2");
 				wakeSecondBarber(customer);
 			}
@@ -131,23 +132,25 @@ public class Assignment3 {
 		
 		public void wakeFirstBarber(Customer customer) {
 			//wake first barber because he's not doing anything
-			
 			if(barber1.isWaiting()) {
 				synchronized(barber1) {
 					System.out.println("waking barber1");
 					barber1.notify();
 				}
+			} else if(barber2.isNew()){
+				barber1.start();
 			}
 		}
 		
 		public void wakeSecondBarber(Customer customer) {
 			//wake first barber because he's not doing anything
-			
 			if(barber2.isWaiting()) {
 				synchronized(barber2) {
 					System.out.println("waking barber2");
 					barber2.notify();
 				}
+			} else if(barber2.isNew()){
+				barber2.start();
 			}
 		}
 	}
@@ -184,7 +187,7 @@ public class Assignment3 {
 		
 		// a monitor is a software module ocnsisitng of one or more pocedures, an init sequence, and local data
 		
-		//1. the local data vraibles are accessible only by the monitor's procedures and not by any exxternal procedure
+		//1. the local data variables are accessible only by the monitor's procedures and not by any external procedure
 		//2. a process enters themonitor by invoking one of its procedures
 		//3. only one process may be executing in the monitor at a time; any other processes that have invoked the monitor are blocked, waiting for the monitor to become available
 		
@@ -196,8 +199,8 @@ public class Assignment3 {
 		barberShopMonitor.start();
 		customerMonitor.start();
 		
-		barberShopMonitor.barber1.start();
-		barberShopMonitor.barber2.start();
+//		barberShopMonitor.barber1.start();
+//		barberShopMonitor.barber2.start();
 	}
 
 }
