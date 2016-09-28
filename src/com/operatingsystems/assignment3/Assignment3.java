@@ -5,23 +5,10 @@ import java.util.List;
 
 public class Assignment3 {
 	
-	public final static int HAIR_CUT_TIME = 2000;
-	
-//	public static class BarberShopMonitor {
-//		//two barbers
-//		//ten chairs for people waiting (queue)
-//		
-//		//customer enters and goes to chair if one is empty, otherwise sit in waiting
-//		
-//		//if all chairs are full, customers leaves
-//		
-//		//when a haircut is finished, customer leaves, next person in line moves to the barber's chair
-//		
-//		//suspend execution of the calling process on condition c. the monitor is now available for use by another process
-
-	//for debugging
+	//for debugging customers
 	static int idCount = 1;
 	
+	//id is mostly meaningless, but makes it easier to keep up with order of customers and handling a customer in general
 	public static class Customer {
 		public int id;
 		
@@ -31,13 +18,15 @@ public class Assignment3 {
 	}
 	
 	public static class Barber extends Thread {
+		public int id;
+		public boolean isBusy = true;
 		int count = 0;
 		
 		@Override
 		public synchronized void run() {
 			while(true) {
 				count++;
-				//make a delay for haircuts
+				//creating a delay for haircuts without using Thread.sleep or writing logic for a timer
 				if(count > 10000000) {
 					try {
 						System.out.println("barber is asleep now");
@@ -51,10 +40,12 @@ public class Assignment3 {
 			}
 		}
 		
+		//convience method for checking if barber is currently waiting
 		public boolean isWaiting() {
 			return this.getState().equals(Thread.State.WAITING);
 		}
 		
+		//convenience method for checking if barber hasn't been started yet
 		public boolean isNew() {
 			return this.getState().equals(Thread.State.NEW);
 		}
@@ -66,10 +57,17 @@ public class Assignment3 {
 		
 		List<Customer> customers = new ArrayList<Customer>();
 		
+		
+		int count = 0;
+		
 		@Override 
 		public synchronized void run() {
+			barber1.id = 1;
+			barber2.id = 2;
+			
 			while(true) {
 				try {
+					//constantly handling customers or putting customerMonitor or barbers to sleep
 					handleCustomers();
 				} catch (InterruptedException e) {
 					e.printStackTrace();
@@ -78,27 +76,37 @@ public class Assignment3 {
 		}
 		
 		public void handleCustomers() throws InterruptedException {
+			
+			//if iether barber isn't doing anything right now
 			if(barber1.isWaiting() || barber2.isWaiting()) {
-				
 				if(customers.size() > 0) {
+					
 					Customer customer = null;
 					while(customer == null) {
+						//NOTE: customer being null here was really weird behavior that would only happen after like 1000000 customers had been processed
+						//I could never really figure out why, so I just made sure it wouldn't be null here. This isn't a good or long lasting solution but it works for now
+						
+						
+						//pull the customer thats been waiting the longest from the list
 						customer = customers.remove(0);
 					}
 
-					//wake barber 1 if hes not busy
+					//only one barber at a time can be assigned a customer
 					if(barber1.isWaiting() || barber1.isNew()) {
+						//wake barber 1 if hes not busy and give him a customer to work on
 						System.out.println("customer number: " + customer.id + " got up from waiting and got a haircut from barber1");
-						wakeFirstBarber(customer);
+						wakeBarber(barber1, customer);
 					} else if(barber2.isWaiting() || barber2.isNew()) {
+						//wake barber 2 if hes not busy and give him a customer to work on
 						System.out.println("customer number: " + customer.id + " got up from waiting and got a haircut from barber2");
-						wakeSecondBarber(customer);
+						wakeBarber(barber2, customer);
 					}
 					
 				}
 				
 			}
 			
+			//if we have at least one seat open in the shop, wake the customer monitor if it was asleep to start bringing in more customers
 			if(customers.size() < 10) {
 				if(customerMonitor.getState() == Thread.State.WAITING) {
 					synchronized(customerMonitor) {
@@ -116,45 +124,42 @@ public class Assignment3 {
 				//both barbers are already busy and the queue is already full
 				System.out.println("customer number: " + customer.id + " should leave. putting customer monitor to sleep");
 				customerMonitor.wait();
-			} else if((!barber1.isWaiting() && !barber1.isNew()) && (!barber2.isWaiting() && !barber2.isNew())) {
-				//both barbers are busy but we can sit them in a chair
-				System.out.println("customer number: " + customer.id + " is waiting for a haircut");
-				customers.add(customer);
-			} else if(barber1.isWaiting() || barber1.isNew()) {
-				System.out.println("customer number: " + customer.id + " walked right in and got a haircut from barber1");
-				wakeFirstBarber(customer);
-			} else if(barber2.isWaiting() || barber2.isNew()) {
-				System.out.println("customer number: " + customer.id + " walked right in and got a haircut from barber2");
-				wakeSecondBarber(customer);
+			} else {
+				if ((barber1.isBusy && !barber1.isNew()) && (barber2.isBusy && !barber2.isNew())) {
+					//both barbers are busy but we can sit the customer in a chair
+					System.out.println("customer number: " + customer.id + " is waiting for a haircut");
+					customers.add(customer);
+				} else if(customers.size() < 1) {
+					//if there are no customers waiting: 
+					if(barber1.isWaiting() || barber1.isNew()) {
+						//nobody was waiting so a customer walked right in
+						System.out.println("customer number: " + customer.id + " walked right in and got a haircut from barber1");
+						wakeBarber(barber1, customer);
+					} else if(barber2.isWaiting() || barber2.isNew()) {
+						//nobody was waiting so a customer walked right in
+						System.out.println("customer number: " + customer.id + " walked right in and got a haircut from barber2");
+						wakeBarber(barber2, customer);
+					}
+				}
 			}
 				
 		}
 		
-		public void wakeFirstBarber(Customer customer) {
-			//wake first barber because he's not doing anything
-			if(barber1.isWaiting()) {
-				synchronized(barber1) {
-					System.out.println("waking barber1");
-					barber1.notify();
+		public void wakeBarber(Barber barber, Customer customer) {
+			//wake barber because he's not doing anything
+			if(barber.isWaiting()) {
+				synchronized(barber) {
+					System.out.println("waking barber " + barber.id + " for customer number " + customer.id);
+					barber.isBusy = true;
+					barber.notify();
 				}
-			} else if(barber2.isNew()){
-				barber1.start();
-			}
-		}
-		
-		public void wakeSecondBarber(Customer customer) {
-			//wake first barber because he's not doing anything
-			if(barber2.isWaiting()) {
-				synchronized(barber2) {
-					System.out.println("waking barber2");
-					barber2.notify();
-				}
-			} else if(barber2.isNew()){
-				barber2.start();
+			} else if(barber.isNew()){
+				barber.start();
 			}
 		}
 	}
 	
+	//this only exists to throw customers at the barber shop whenever its awake
 	public static class CustomerMonitor extends Thread {
 		int count = 0;
 		
@@ -179,28 +184,12 @@ public class Assignment3 {
 	static CustomerMonitor customerMonitor;
 	
 	public static void main(String[] args) {
-		//Create a monitor to manage a barbershop.  
-		//Assume we have two barbers, and ten chairs for people waiting for a haircut.  
-		//When a customer enters the shop, they immediately sit in a barber's chair if one is empty, otherwise they sit in one of the waiting chairs. 
-		//If all the chairs are full, the customer leaves.  
-		//When a haircut is finished, the customer leaves and the person who has been waiting the longest then moves to the barber's chair and gets their haircut.
-		
-		// a monitor is a software module ocnsisitng of one or more pocedures, an init sequence, and local data
-		
-		//1. the local data variables are accessible only by the monitor's procedures and not by any external procedure
-		//2. a process enters themonitor by invoking one of its procedures
-		//3. only one process may be executing in the monitor at a time; any other processes that have invoked the monitor are blocked, waiting for the monitor to become available
-		
-		//randomly put customers into the store
-		
 		barberShopMonitor = new BarberShopMonitor();
 		customerMonitor = new CustomerMonitor();
 		
+		//start the barber shop monitor and the process that generates customers for the barber shop
 		barberShopMonitor.start();
 		customerMonitor.start();
-		
-//		barberShopMonitor.barber1.start();
-//		barberShopMonitor.barber2.start();
 	}
 
 }
